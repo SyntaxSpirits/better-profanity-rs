@@ -1,0 +1,15 @@
+better-profanity-rs
+Copyright 2026 Alex Kholodniak
+
+This product is a port of better_profanity (https://github.com/snguyenthanh/better_profanity)
+by Son Nguyen Thanh, licensed under the MIT License. Its LICENSE file reads
+"Copyright (c) 2018 The Python Packaging Authority"; that notice is kept in LICENSE.
+
+The following files are copies of better_profanity 0.7.0, unchanged:
+
+- crates/better-profanity/data/profanity_wordlist.txt and
+  bindings/python/python/better_profanity_rs/profanity_wordlist.txt (the word list);
+- crates/better-profanity/data/alphabetic_unicode.json and
+  bindings/python/python/better_profanity_rs/alphabetic_unicode.json;
+- bindings/python/python/better_profanity_rs/better_profanity.py, constants.py, utils.py and
+  varying_string.py, which the Python package runs for inputs the Rust core does not handle.

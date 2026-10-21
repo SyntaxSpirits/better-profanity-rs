@@ -1,0 +1,65 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "better-profanity-rs"
+description = "Fast drop-in replacement for better_profanity: the same censored text from a Rust core"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Alex Kholodniak", email = "alexandrkholodniak@gmail.com" }]
+requires-python = ">=3.9"
+keywords = ["profanity", "better_profanity", "censor", "swear-words", "moderation", "rust"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Text Processing :: Filters",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://syntaxspirits.dev"
+Repository = "https://github.com/SyntaxSpirits/better-profanity-rs"
+Issues = "https://github.com/SyntaxSpirits/better-profanity-rs/issues"
+
+[dependency-groups]
+dev = ["pytest", "hypothesis", "better-profanity==0.7.0"]
+bench = ["better-profanity==0.7.0", "pyarrow"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "better_profanity_rs._core"
+features = ["pyo3/extension-module"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+# The modules and tests of better_profanity 0.7.0, kept as they are.
+extend-exclude = [
+    "python/better_profanity_rs/better_profanity.py",
+    "python/better_profanity_rs/constants.py",
+    "python/better_profanity_rs/utils.py",
+    "python/better_profanity_rs/varying_string.py",
+    "tests/test_upstream.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["better_profanity_rs"]
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "../../crates/better-profanity/Cargo.toml" },
+    { file = "../../crates/better-profanity/src/**/*.rs" },
+]

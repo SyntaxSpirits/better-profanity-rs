@@ -1,0 +1,19 @@
+[package]
+name = "better-profanity-python"
+description = "Python bindings for better-profanity"
+publish = false
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.29", features = ["abi3-py39"] }
+better-profanity = { path = "../../crates/better-profanity" }
+rustc-hash = "2"

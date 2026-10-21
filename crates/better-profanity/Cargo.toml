@@ -1,0 +1,17 @@
+[package]
+name = "better-profanity"
+description = "Port of the better_profanity word filter that censors exactly the same words"
+readme = "../../README.md"
+keywords = ["profanity", "censor", "filter", "moderation", "text"]
+categories = ["text-processing"]
+include = ["src/**/*.rs", "data/*", "Cargo.toml", "LICENSE", "NOTICE"]
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+rustc-hash = "2"

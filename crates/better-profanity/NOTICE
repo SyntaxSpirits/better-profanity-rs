@@ -1,0 +1,9 @@
+better-profanity (Rust)
+Copyright 2026 Alex Kholodniak
+
+This product is a port of better_profanity (https://github.com/snguyenthanh/better_profanity)
+by Son Nguyen Thanh, licensed under the MIT License. Its LICENSE file reads
+"Copyright (c) 2018 The Python Packaging Authority"; that notice is kept in LICENSE.
+
+data/profanity_wordlist.txt (the word list) and data/alphabetic_unicode.json are copies of the
+files of better_profanity 0.7.0, unchanged.
