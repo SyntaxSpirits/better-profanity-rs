@@ -1,12 +1,19 @@
 """Comparison with better_profanity 0.7.0: the same output, or the same exception, for every
 input, word list and change to a Profanity object or to the modules."""
 
+import ast
+import compileall
 import copy
 import gc
+import inspect
+import os
+import pathlib
 import pickle
 import random
+import shutil
 import subprocess
 import sys
+import textwrap
 import threading
 import weakref
 
@@ -19,7 +26,7 @@ from inputs import CLEAN, SEPARATORS, WORDS, mutate, mutated_inputs, phrase
 
 import better_profanity_rs as rs
 import better_profanity_rs.better_profanity as rs_module
-from better_profanity_rs import _fast
+from better_profanity_rs import _fast, _original
 
 CENSOR_CHARS = ["*", "-", "", "##", "é", "\U0001f600", 5, None]
 
@@ -657,6 +664,24 @@ def test_allowed_characters_changed_by_reentrant_update(restore_allowed):
     )
 
 
+def test_allowed_characters_during_an_update(restore_allowed):
+    def censor_during_update(p):
+        seen = []
+
+        def changes():
+            yield "!"
+            seen.append(p.censor("abcd"))
+            yield "-"
+            seen.append(p.censor("ab-cd"))
+
+        p.ALLOWED_CHARACTERS.update(changes())
+        return seen + [p.censor("ab-cd")]
+
+    assert censor_during_update(rs.Profanity(["abcd"])) == censor_during_update(
+        up.Profanity(["abcd"])
+    )
+
+
 def test_allowed_characters_changed_by_other_threads(restore_allowed):
     p = rs.Profanity(["hello"])
     allowed = rs.constants.ALLOWED_CHARACTERS
@@ -774,6 +799,50 @@ def test_recursion_errors_match():
         [sys.executable, "-c", RECURSION_CHECK], capture_output=True, text=True, check=True
     )
     assert out.stdout.startswith("0 "), out.stdout
+
+
+def test_original_source_is_upstreams():
+    upstream_source = textwrap.dedent(inspect.getsource(up.Profanity._hide_swear_words))
+    assert upstream_source == _original.HIDE_SWEAR_WORDS
+    path = pathlib.Path(rs_module.__file__)
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Profanity")
+    method = next(n for n in cls.body if getattr(n, "name", None) == "_hide_swear_words")
+    lines = path.read_text(encoding="utf-8").splitlines()[method.lineno - 1 : method.end_lineno]
+    assert textwrap.dedent("\n".join(lines)) + "\n" == _original.HIDE_SWEAR_WORDS
+
+
+SOURCELESS_CHECK = """
+import better_profanity_rs
+from better_profanity_rs import _fast, _original
+
+assert not better_profanity_rs.__file__.endswith(".py")
+p = better_profanity_rs.Profanity()
+assert _fast._fast_result(p, "that sh1t", "*") == "that ****"
+print(p.censor("f.u.c.k you"))
+"""
+
+
+def test_import_without_source_files(tmp_path):
+    package = pathlib.Path(rs.__file__).parent
+    copy_ = tmp_path / "better_profanity_rs"
+    shutil.copytree(package, copy_, ignore=shutil.ignore_patterns("__pycache__"))
+    compileall.compile_dir(str(copy_), legacy=True, quiet=1)
+    for source in copy_.glob("*.py"):
+        source.unlink()
+    env = {**os.environ, "PYTHONPATH": str(tmp_path)}
+    out = subprocess.run(
+        [sys.executable, "-c", SOURCELESS_CHECK], capture_output=True, text=True, env=env
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout == up.Profanity().censor("f.u.c.k you") + "\n"
+
+
+def test_module_keeps_the_gil():
+    source = pathlib.Path(__file__).parents[1] / "src" / "lib.rs"
+    if not source.exists():
+        pytest.skip("Rust sources not available")
+    assert "#[pymodule(gil_used = true)]" in source.read_text(encoding="utf-8")
 
 
 def test_pickle_and_copy(fallbacks):

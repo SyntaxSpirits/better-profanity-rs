@@ -13,3 +13,6 @@ The following files are copies of better_profanity 0.7.0, unchanged:
   bindings/python/python/better_profanity_rs/alphabetic_unicode.json;
 - bindings/python/python/better_profanity_rs/better_profanity.py, constants.py, utils.py and
   varying_string.py, which the Python package runs for inputs the Rust core does not handle.
+
+bindings/python/python/better_profanity_rs/_original.py holds the source of
+Profanity._hide_swear_words from better_profanity 0.7.0 as a string, unchanged.

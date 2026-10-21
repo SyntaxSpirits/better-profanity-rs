@@ -147,6 +147,8 @@ Known differences:
 - A compiled word list keeps the `VaryingString` objects of `CENSOR_WORDSET` alive until the
   list changes or the `Profanity` object is deleted. An attribute added to one of them that
   refers back to the `Profanity` object keeps that object alive.
+- Free-threaded CPython builds are not supported: the extension module asks to keep the GIL
+  enabled.
 - `__version__` and `name` are those of `better_profanity_rs`.
 
 ## Development

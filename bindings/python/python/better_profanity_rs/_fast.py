@@ -9,13 +9,13 @@ other case the original body runs.
 
 import ast
 import functools
-import inspect
 import linecache
 import sys
 import textwrap
+import threading
 import weakref
 
-from . import _core, better_profanity, constants
+from . import _core, _original, better_profanity, constants
 from .better_profanity import Profanity
 from .varying_string import VaryingString
 
@@ -46,27 +46,38 @@ _REPLACEMENT = better_profanity.get_replacement_for_swear_word
 _VARYING_EQ = VaryingString.__eq__
 # id(Profanity object) -> (weak reference to it, usable WordMatcher)
 _matchers = {}
+# Guards the change counters of AllowedCharacters, which threads may update at once.
+_COUNTERS = threading.Lock()
 
 
 class AllowedCharacters(set):
     """ALLOWED_CHARACTERS: a set that drops its Rust table whenever it changes.
 
-    `_version` is increased before and after every change, so a table built while a change is
-    in progress, from another thread or from code the change itself runs, is never kept.
+    `_active` counts changes in progress, which can run code that censors (an update from a
+    generator, for example); while one is, the original code runs. `_version` is increased when
+    a change starts and ends, so a table built meanwhile, by another thread, is never kept.
     """
 
-    __slots__ = ("_table", "_version")
+    __slots__ = ("_table", "_version", "_active")
 
     def __init__(self, *args):
-        self._changing()
+        self._begin_change()
         try:
             super().__init__(*args)
         finally:
-            self._changing()
+            self._end_change()
 
-    def _changing(self):
-        self._version = getattr(self, "_version", 0) + 1
-        self._table = None
+    def _begin_change(self):
+        with _COUNTERS:
+            self._active = getattr(self, "_active", 0) + 1
+            self._version = getattr(self, "_version", 0) + 1
+            self._table = None
+
+    def _end_change(self):
+        with _COUNTERS:
+            self._active -= 1
+            self._version += 1
+            self._table = None
 
     def __reduce__(self):
         return type(self), (list(self),)
@@ -75,11 +86,11 @@ class AllowedCharacters(set):
 def _invalidating(method):
     @functools.wraps(method)
     def wrapper(self, *args):
-        self._changing()
+        self._begin_change()
         try:
             return method(self, *args)
         finally:
-            self._changing()
+            self._end_change()
 
     return wrapper
 
@@ -103,12 +114,14 @@ for _name in (
 
 
 def _char_table(chars):
-    """The Rust table of an AllowedCharacters set, or False if it holds anything but str or
-    changed while the table was built.
+    """The Rust table of an AllowedCharacters set, or False if it holds anything but str, is
+    being changed, or changed while the table was built.
 
     Strings longer than one character never equal a character of the text, and texts with
     lone surrogates take the Python path, so both are left out.
     """
+    if chars._active:
+        return False
     table = chars._table
     if table is not None:
         return table
@@ -121,7 +134,7 @@ def _char_table(chars):
         spaces = [c for c in members if c.isspace()]
         table = _core.CharTable("".join(members), "".join(spaces))
     chars._table = table
-    if chars._version != version:
+    if chars._version != version or chars._active:
         chars._table = None
         return False
     return table
@@ -253,7 +266,7 @@ def _with_rust_path(method):
     from a wrapper: it then runs in the same frame and at the same depth as in better_profanity
     and reads the same, possibly patched, module globals.
     """
-    source = textwrap.dedent(inspect.getsource(method))
+    source = _original.HIDE_SWEAR_WORDS
     function = ast.parse(source).body[0]
     docstring = function.body[0]
     indent = " " * docstring.col_offset

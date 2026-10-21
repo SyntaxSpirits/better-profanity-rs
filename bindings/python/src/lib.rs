@@ -223,9 +223,9 @@ impl WordMatcher {
     /// order.
     fn is_current(&self, words: &Bound<'_, PyAny>) -> bool {
         let ptr = words.as_ptr();
-        // SAFETY: the type is checked first; `words` stays alive during the call, and
-        // PyList_GetItem and PyTuple_GetItem return borrowed references for indexes in range,
-        // which are only compared.
+        // SAFETY: the type is checked first and `words` stays alive during the call.
+        // PyList_GetItem and PyTuple_GetItem return borrowed references, which are only
+        // compared, or NULL with an IndexError for an index out of range.
         unsafe {
             let (len, get): (ffi::Py_ssize_t, unsafe extern "C" fn(_, _) -> _) =
                 if self.is_list && ffi::PyList_CheckExact(ptr) != 0 {
@@ -237,11 +237,14 @@ impl WordMatcher {
                 };
             self.set.is_some()
                 && len == self.items.len() as ffi::Py_ssize_t
-                && self
-                    .items
-                    .iter()
-                    .enumerate()
-                    .all(|(i, item)| get(ptr, i as ffi::Py_ssize_t) == item.as_ptr())
+                && self.items.iter().enumerate().all(|(i, item)| {
+                    let current = get(ptr, i as ffi::Py_ssize_t);
+                    if current.is_null() {
+                        // The sequence shrank meanwhile; the IndexError is not raised.
+                        ffi::PyErr_Clear();
+                    }
+                    current == item.as_ptr()
+                })
         }
     }
 
@@ -437,7 +440,9 @@ impl Lowercase for PyLower<'_> {
     }
 }
 
-#[pymodule]
+/// The caches in `_fast` and the checks of `is_current` assume the GIL, so free-threaded
+/// Python keeps it enabled for this module.
+#[pymodule(gil_used = true)]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<CharTable>()?;
