@@ -1,0 +1,67 @@
+{
+ "python": "3.11.5",
+ "better_profanity_rs": "0.1.0",
+ "results": [
+  {
+   "corpus": "mutated",
+   "config": "default",
+   "texts": 26000,
+   "censored_by_better_profanity": 19876,
+   "mismatches": 0,
+   "python_path_calls": 0,
+   "seconds": 22.7,
+   "examples": []
+  },
+  {
+   "corpus": "wikitext",
+   "config": "default",
+   "texts": 2183,
+   "censored_by_better_profanity": 171,
+   "mismatches": 0,
+   "python_path_calls": 0,
+   "seconds": 35.1,
+   "examples": []
+  },
+  {
+   "corpus": "civil_comments",
+   "config": "default",
+   "texts": 97320,
+   "censored_by_better_profanity": 10046,
+   "mismatches": 0,
+   "python_path_calls": 0,
+   "seconds": 736.1,
+   "examples": []
+  },
+  {
+   "corpus": "jigsaw",
+   "config": "default",
+   "texts": 159571,
+   "censored_by_better_profanity": 20439,
+   "mismatches": 0,
+   "python_path_calls": 0,
+   "seconds": 1600.2,
+   "examples": []
+  },
+  {
+   "corpus": "mutated",
+   "config": "custom",
+   "texts": 26000,
+   "censored_by_better_profanity": 19823,
+   "mismatches": 0,
+   "python_path_calls": 0,
+   "seconds": 23.9,
+   "examples": []
+  },
+  {
+   "corpus": "wikitext",
+   "config": "custom",
+   "texts": 2183,
+   "censored_by_better_profanity": 159,
+   "mismatches": 0,
+   "python_path_calls": 0,
+   "seconds": 33.3,
+   "examples": []
+  }
+ ],
+ "seconds": 2453.8
+}
