@@ -26,6 +26,7 @@ pub mod data;
 mod words;
 
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -38,13 +39,29 @@ pub use words::{SetId, Walk, WordSet, WordSetBuilder};
 ///
 /// Words are lowercased with Rust's Unicode tables, which can differ from those of a given
 /// Python version for characters added to Unicode recently.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Profanity {
     words: Vec<Vec<Box<[char]>>>,
     set: WordSet,
     chars_mapping: FxHashMap<char, Box<[char]>>,
     custom_mapping: bool,
     max_number_combinations: usize,
+    /// Set when `censor` found no words. better_profanity loads the default list at that point,
+    /// so getters report it and the next change starts from it.
+    defaults_loaded: AtomicBool,
+}
+
+impl Clone for Profanity {
+    fn clone(&self) -> Self {
+        Profanity {
+            words: self.words.clone(),
+            set: self.set.clone(),
+            chars_mapping: self.chars_mapping.clone(),
+            custom_mapping: self.custom_mapping,
+            max_number_combinations: self.max_number_combinations,
+            defaults_loaded: AtomicBool::new(self.defaults_pending()),
+        }
+    }
 }
 
 impl Default for Profanity {
@@ -82,6 +99,7 @@ impl Profanity {
                 .collect(),
             custom_mapping: false,
             max_number_combinations: 1,
+            defaults_loaded: AtomicBool::new(false),
         }
     }
 
@@ -93,6 +111,7 @@ impl Profanity {
         S: AsRef<str>,
         W: AsRef<str>,
     {
+        self.settle();
         let words: Vec<S> = words.into_iter().collect();
         if words.is_empty() {
             self.load_default_censor_words(whitelist);
@@ -103,6 +122,7 @@ impl Profanity {
 
     /// `load_censor_words(whitelist_words=whitelist)`: the default word list.
     pub fn load_default_censor_words<W: AsRef<str>>(&mut self, whitelist: &[W]) {
+        self.settle();
         self.populate(data::read_wordlist(data::WORDLIST), whitelist);
     }
 
@@ -114,6 +134,7 @@ impl Profanity {
         path: impl AsRef<Path>,
         whitelist: &[W],
     ) -> std::io::Result<()> {
+        self.settle();
         let text = std::fs::read_to_string(path)?;
         self.populate(data::read_wordlist(&text), whitelist);
         Ok(())
@@ -126,6 +147,7 @@ impl Profanity {
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
+        self.settle();
         for word in words {
             let entry = self.varying(word.as_ref());
             self.words.push(entry);
@@ -139,6 +161,7 @@ impl Profanity {
         I: IntoIterator<Item = (char, V)>,
         V: IntoIterator<Item = char>,
     {
+        self.settle();
         self.chars_mapping = mapping
             .into_iter()
             .map(|(c, variants)| (c, variants.into_iter().collect()))
@@ -150,34 +173,55 @@ impl Profanity {
     /// when looking for phrases. Loading words raises it to the largest number of separator
     /// characters in a word; it never decreases on its own.
     pub fn max_number_combinations(&self) -> usize {
+        if self.defaults_pending() {
+            return self
+                .max_number_combinations
+                .max(default_profanity().max_number_combinations);
+        }
         self.max_number_combinations
     }
 
     pub fn set_max_number_combinations(&mut self, n: usize) {
+        self.settle();
         self.max_number_combinations = n;
     }
 
     /// The number of words, as `len(CENSOR_WORDSET)`.
     pub fn len(&self) -> usize {
+        if self.defaults_pending() {
+            return default_profanity().len();
+        }
         self.words.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.words.is_empty()
+        self.len() == 0
+    }
+
+    fn defaults_pending(&self) -> bool {
+        self.defaults_loaded.load(Ordering::Relaxed) && self.words.is_empty()
+    }
+
+    /// Loads the default list that `censor` used on an empty list, as better_profanity did.
+    fn settle(&mut self) {
+        if std::mem::take(self.defaults_loaded.get_mut()) && self.words.is_empty() {
+            self.populate(data::read_wordlist(data::WORDLIST), &[] as &[&str]);
+        }
     }
 
     /// `censor(text, censor_char)`: replaces each swear word with `censor_char` four times.
-    /// With no words loaded, the default list is used, as better_profanity loads it then.
+    /// With no words loaded, better_profanity loads the default list and keeps it; so does this
+    /// method, in effect: later calls and changes see the default list.
     pub fn censor(&self, text: &str, censor_char: &str) -> String {
         if self.words.is_empty() {
+            self.defaults_loaded.store(true, Ordering::Relaxed);
             let mut defaults;
             let source = if self.custom_mapping {
                 defaults = self.clone();
-                defaults.load_default_censor_words::<&str>(&[]);
+                defaults.settle();
                 &defaults
             } else {
-                static DEFAULT: OnceLock<Profanity> = OnceLock::new();
-                DEFAULT.get_or_init(Profanity::new)
+                default_profanity()
             };
             let max = self
                 .max_number_combinations
@@ -250,6 +294,11 @@ impl Profanity {
     }
 }
 
+fn default_profanity() -> &'static Profanity {
+    static DEFAULT: OnceLock<Profanity> = OnceLock::new();
+    DEFAULT.get_or_init(Profanity::new)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -316,6 +365,23 @@ mod tests {
         // With one following word, better_profanity joins only every other word to the next.
         assert_eq!(custom.censor("a m3rry christmas", "#"), "a m3rry christmas");
         assert_eq!(custom.censor("a b m3rry christmas", "#"), "a b ####");
+    }
+
+    #[test]
+    fn defaults_loaded_by_censor_are_kept() {
+        let mut p = Profanity::with_words(["happy"]);
+        p.load_censor_words(["happy"], &["happy"]);
+        assert_eq!((p.len(), p.max_number_combinations()), (0, 1));
+        assert_eq!(p.censor("fuck", "*"), "****");
+        assert_eq!((p.len(), p.max_number_combinations()), (916, 5));
+        p.add_censor_words(["jolly"]);
+        assert_eq!(p.censor("fuck jolly", "*"), "**** ****");
+        assert_eq!(p.len(), 917);
+
+        let mut p = Profanity::with_words(["happy"]);
+        p.load_censor_words(["happy"], &["happy"]);
+        p.add_censor_words(["jolly"]);
+        assert_eq!(p.censor("fuck jolly", "*"), "fuck ****");
     }
 
     #[test]
