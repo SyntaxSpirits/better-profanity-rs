@@ -9,7 +9,6 @@
 import csv
 import hashlib
 import os
-import sys
 import urllib.request
 
 import pyarrow.parquet as pq
@@ -58,6 +57,6 @@ def load(name):
     if name == "wikitext":
         lines = pq.read_table(path, columns=["text"]).column("text").to_pylist()
         return [line.strip() for line in lines if line.strip() and not line.startswith(" =")]
-    csv.field_size_limit(sys.maxsize)
+    csv.field_size_limit(2**31 - 1)
     with open(path, encoding="utf-8", newline="") as f:
         return [row["comment_text"] for row in csv.DictReader(f)]
