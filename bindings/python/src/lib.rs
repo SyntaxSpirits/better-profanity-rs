@@ -6,7 +6,7 @@ use better_profanity::{
 use pyo3::ffi;
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyInt, PyList, PyString, PyTuple, PyType};
+use pyo3::types::{PyDict, PyInt, PyList, PyString, PyTuple, PyType};
 use rustc_hash::FxHashMap;
 
 /// `ALLOWED_CHARACTERS` as the Rust core reads it.
@@ -118,6 +118,30 @@ impl<'py> Compiler<'_, 'py> {
             if !item.get_type().is(self.varying_string) {
                 return None;
             }
+            // The matcher keeps its items alive, so they must not lead back to anything else,
+            // such as the Profanity object that caches the matcher.
+            let fields = item.getattr(intern!(py, "__dict__")).ok()?;
+            let fields = fields.cast_exact::<PyDict>().ok()?;
+            let original = intern!(py, "_original");
+            if fields.len() != 4
+                || item
+                    .getattr(original)
+                    .ok()?
+                    .cast_exact::<PyString>()
+                    .is_err()
+            {
+                return None;
+            }
+            for name in [
+                original,
+                intern!(py, "_char_combos"),
+                intern!(py, "_min_len"),
+                intern!(py, "_max_len"),
+            ] {
+                if !fields.contains(name).ok()? {
+                    return None;
+                }
+            }
             let combos = item.getattr(intern!(py, "_char_combos")).ok()?;
             let combos = combos.cast_exact::<PyList>().ok()?;
             for name in [intern!(py, "_min_len"), intern!(py, "_max_len")] {
@@ -140,49 +164,53 @@ impl<'py> Compiler<'_, 'py> {
     }
 }
 
-/// `CENSOR_WORDSET` compiled to a trie, with what it was compiled from.
+/// `CENSOR_WORDSET` compiled to a trie, with the items it was compiled from.
+///
+/// The items are kept so that their addresses cannot be reused while the matcher exists; the
+/// list or tuple itself is not, so that the matcher holds nothing that could refer back to the
+/// Profanity object it is cached for.
 #[pyclass(frozen, module = "better_profanity_rs._core")]
 struct WordMatcher {
-    source: Py<PyAny>,
-    items: Option<Vec<Py<PyAny>>>,
+    is_list: bool,
+    items: Vec<Py<PyAny>>,
     set: Option<WordSet>,
+}
+
+/// The items of an exact list or tuple, and whether it is a list.
+fn entries<'py>(words: &Bound<'py, PyAny>) -> Option<(bool, Vec<Bound<'py, PyAny>>)> {
+    if let Ok(list) = words.cast_exact::<PyList>() {
+        Some((true, list.iter().collect()))
+    } else if let Ok(tuple) = words.cast_exact::<PyTuple>() {
+        Some((false, tuple.iter().collect()))
+    } else {
+        None
+    }
 }
 
 #[pymethods]
 impl WordMatcher {
     /// Compiles an exact list or tuple of `VaryingString` objects (of the class given) and
-    /// plain strings. For anything else, `usable` is false.
+    /// plain strings. For anything else, `usable` is false and nothing is kept.
     #[new]
     fn new(words: &Bound<'_, PyAny>, varying_string: &Bound<'_, PyType>) -> Self {
-        let list = words.cast_exact::<PyList>().ok();
-        let entries: Option<Vec<Bound<'_, PyAny>>> = if let Some(list) = list {
-            Some(list.iter().collect())
-        } else if let Ok(tuple) = words.cast_exact::<PyTuple>() {
-            Some(tuple.iter().collect())
-        } else {
-            None
+        let mut compiler = Compiler {
+            varying_string,
+            builder: WordSet::builder(),
+            sets: FxHashMap::default(),
+            variants: FxHashMap::default(),
+            word: Vec::new(),
         };
-        // A tuple cannot change, so only a list needs its items remembered.
-        let items = list
-            .and(entries.as_ref())
-            .map(|entries| entries.iter().map(|e| e.clone().unbind()).collect());
-        let set = entries.and_then(|entries| {
-            let mut compiler = Compiler {
-                varying_string,
-                builder: WordSet::builder(),
-                sets: FxHashMap::default(),
-                variants: FxHashMap::default(),
-                word: Vec::new(),
-            };
-            entries
-                .iter()
-                .all(|item| compiler.add(item))
-                .then(|| compiler.builder.build())
-        });
-        WordMatcher {
-            source: words.clone().unbind(),
-            items,
-            set,
+        match entries(words) {
+            Some((is_list, items)) if items.iter().all(|item| compiler.add(item)) => WordMatcher {
+                is_list,
+                items: items.into_iter().map(Bound::unbind).collect(),
+                set: Some(compiler.builder.build()),
+            },
+            _ => WordMatcher {
+                is_list: false,
+                items: Vec::new(),
+                set: None,
+            },
         }
     }
 
@@ -191,24 +219,29 @@ impl WordMatcher {
         self.set.is_some()
     }
 
-    /// Whether `words` is the object this was compiled from and, for a list, still holds the
-    /// same items.
+    /// Whether `words` is a list or tuple, as compiled, holding the same items in the same
+    /// order.
     fn is_current(&self, words: &Bound<'_, PyAny>) -> bool {
-        if !words.is(&self.source) {
-            return false;
-        }
-        let Some(items) = &self.items else {
-            return true;
-        };
         let ptr = words.as_ptr();
-        // SAFETY: `words` is the exact list compiled earlier (checked above) and stays alive
-        // during the call; PyList_GetItem returns a borrowed reference for an index in range,
-        // which is only compared.
+        // SAFETY: the type is checked first; `words` stays alive during the call, and
+        // PyList_GetItem and PyTuple_GetItem return borrowed references for indexes in range,
+        // which are only compared.
         unsafe {
-            ffi::PyList_Size(ptr) == items.len() as ffi::Py_ssize_t
-                && items.iter().enumerate().all(|(i, item)| {
-                    ffi::PyList_GetItem(ptr, i as ffi::Py_ssize_t) == item.as_ptr()
-                })
+            let (len, get): (ffi::Py_ssize_t, unsafe extern "C" fn(_, _) -> _) =
+                if self.is_list && ffi::PyList_CheckExact(ptr) != 0 {
+                    (ffi::PyList_Size(ptr), ffi::PyList_GetItem)
+                } else if !self.is_list && ffi::PyTuple_CheckExact(ptr) != 0 {
+                    (ffi::PyTuple_Size(ptr), ffi::PyTuple_GetItem)
+                } else {
+                    return false;
+                };
+            self.set.is_some()
+                && len == self.items.len() as ffi::Py_ssize_t
+                && self
+                    .items
+                    .iter()
+                    .enumerate()
+                    .all(|(i, item)| get(ptr, i as ffi::Py_ssize_t) == item.as_ptr())
         }
     }
 

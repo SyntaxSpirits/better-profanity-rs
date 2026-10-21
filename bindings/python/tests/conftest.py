@@ -9,13 +9,15 @@ from better_profanity_rs import _fast
 def fallbacks(monkeypatch):
     """Counts calls that took the Python path."""
     calls = []
-    original = _fast._original_hide_swear_words
+    original = _fast._fast_result
 
     def counting(self, text, censor_char):
-        calls.append(text)
-        return original(self, text, censor_char)
+        result = original(self, text, censor_char)
+        if result is None:
+            calls.append(text)
+        return result
 
-    monkeypatch.setattr(_fast, "_original_hide_swear_words", counting)
+    monkeypatch.setattr(_fast, "_fast_result", counting)
     return calls
 
 

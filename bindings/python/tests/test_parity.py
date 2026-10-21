@@ -2,11 +2,13 @@
 input, word list and change to a Profanity object or to the modules."""
 
 import copy
+import gc
 import pickle
 import random
 import subprocess
 import sys
 import threading
+import weakref
 
 import better_profanity as up
 import better_profanity.better_profanity as up_module
@@ -17,6 +19,7 @@ from inputs import CLEAN, SEPARATORS, WORDS, mutate, mutated_inputs, phrase
 
 import better_profanity_rs as rs
 import better_profanity_rs.better_profanity as rs_module
+from better_profanity_rs import _fast
 
 CENSOR_CHARS = ["*", "-", "", "##", "é", "\U0001f600", 5, None]
 
@@ -488,7 +491,9 @@ for _value, _fast_ok in [
     (3, True),
     (10, True),
     (50, True),
-    (51, False),
+    (51, True),
+    (300, True),
+    (990, False),
     (-1, True),
     (True, False),
     (2.5, False),
@@ -634,6 +639,141 @@ def test_missing_attributes():
             assert outcome(b._hide_swear_words, text, "*") == outcome(
                 a._hide_swear_words, text, "*"
             ), (name, text)
+
+
+def test_allowed_characters_changed_by_reentrant_update(restore_allowed):
+    def censor_while_updating(p):
+        def changes():
+            yield "!"
+            p.censor("abcd")
+            yield "-"
+
+        p.censor("ab-cd")
+        p.ALLOWED_CHARACTERS.update(changes())
+        return p.censor("ab-cd")
+
+    assert censor_while_updating(rs.Profanity(["abcd"])) == censor_while_updating(
+        up.Profanity(["abcd"])
+    )
+
+
+def test_allowed_characters_changed_by_other_threads(restore_allowed):
+    p = rs.Profanity(["hello"])
+    allowed = rs.constants.ALLOWED_CHARACTERS
+    stop = threading.Event()
+    errors = []
+
+    def censor():
+        try:
+            while not stop.is_set():
+                p.censor("hello there-hello")
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    def mutate():
+        while not stop.is_set():
+            allowed.add("-")
+            allowed.discard("-")
+
+    threads = [threading.Thread(target=censor) for _ in range(4)]
+    threads += [threading.Thread(target=mutate) for _ in range(2)]
+    switch = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        for t in threads:
+            t.start()
+        threading.Event().wait(1.5)
+    finally:
+        stop.set()
+        for t in threads:
+            t.join()
+        sys.setswitchinterval(switch)
+    assert not errors
+    for text in ["hello there-hello", "hello-there", "a-hello"]:
+        assert p.censor(text) == up.Profanity(["hello"]).censor(text)
+
+
+def test_cache_calls_no_hash_or_eq(fallbacks):
+    def make(module):
+        class Strict(module.Profanity):
+            def __hash__(self):
+                raise RuntimeError("unexpected hash")
+
+            def __eq__(self, other):
+                raise RuntimeError("unexpected eq")
+
+        return Strict(["hello"])
+
+    a, b = make(up), make(rs)
+    for text in ["hello", "a hello b", "h3llo", "nothing"]:
+        assert_same(a, b, text)
+    assert not fallbacks
+
+
+def test_cache_does_not_keep_profanity_alive():
+    for words in (lambda p: [p], lambda p: ["hello"], lambda p: tuple(p.CENSOR_WORDSET)):
+        p = rs.Profanity(["hello"])
+        p.CENSOR_WORDSET = words(p)
+        p.censor("hello")
+        ref = weakref.ref(p)
+        del p
+        gc.collect()
+        assert ref() is None
+    assert all(entry[0]() is not None for entry in _fast._matchers.values())
+
+
+RECURSION_CHECK = """
+import sys
+import better_profanity, better_profanity_rs
+
+def at_depth(depth, fn, *args):
+    if depth:
+        return at_depth(depth - 1, fn, *args)
+    try:
+        return "ok", fn(*args)
+    except RecursionError as e:
+        return "raise", e.args
+
+def outcome(depth, fn, *args):
+    try:
+        return at_depth(depth, fn, *args)
+    except RecursionError:
+        return "too deep for the test itself"
+
+def pair(words, combinations):
+    out = []
+    for module in (better_profanity, better_profanity_rs):
+        p = module.Profanity(words)
+        p.MAX_NUMBER_COMBINATIONS = combinations
+        p.censor("warm up")
+        out.append(p)
+    return out
+
+# CPython 3.11 names the operation that hit the limit, which can differ at the very edge.
+kind = (lambda r: r[0]) if sys.version_info[:2] == (3, 11) else (lambda r: r)
+diffs = []
+for limit, combinations in [(40, 5), (60, 30), (90, 40), (200, 120)]:
+    a, b = pair(["bad", "bad bad"], combinations)
+    text = "bad " * 45
+    sys.setrecursionlimit(limit)
+    try:
+        for depth in range(limit):
+            for fn in ("censor", "contains_profanity"):
+                x = outcome(depth, getattr(a, fn), text)
+                y = outcome(depth, getattr(b, fn), text)
+                if kind(x) != kind(y):
+                    diffs.append((limit, combinations, depth, fn, x, y))
+    finally:
+        sys.setrecursionlimit(1000)
+print(len(diffs), diffs[:3])
+"""
+
+
+def test_recursion_errors_match():
+    out = subprocess.run(
+        [sys.executable, "-c", RECURSION_CHECK], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.startswith("0 "), out.stdout
 
 
 def test_pickle_and_copy(fallbacks):

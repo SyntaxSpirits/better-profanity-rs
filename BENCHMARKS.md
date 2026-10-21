@@ -12,24 +12,25 @@ at least 50 ms per text for `better-profanity-rs`. Every output was checked to b
 
 | Words | Texts with swear words | `contains_profanity`, better_profanity | better-profanity-rs | Speed-up | `censor`, better_profanity | better-profanity-rs | Speed-up |
 |---|---|---|---|---|---|---|---|
-| 10 | 0 of 20 | 9.03 ms | 3.91 µs | 2,311× | 9.20 ms | 3.90 µs | 2,357× |
-| 30 | 1 of 20 | 34.64 ms | 5.62 µs | 6,161× | 34.08 ms | 5.67 µs | 6,014× |
-| 100 | 1 of 20 | 123.77 ms | 11.87 µs | 10,428× | 123.41 ms | 11.78 µs | 10,475× |
-| 300 | 16 of 20 | 375.45 ms | 30.15 µs | 12,453× | 375.34 ms | 29.92 µs | 12,544× |
-| 700 | 17 of 20 | 888.63 ms | 78.17 µs | 11,368× | 885.14 ms | 76.66 µs | 11,546× |
+| 10 | 0 of 20 | 9.11 ms | 4.30 µs | 2,117× | 9.07 ms | 4.31 µs | 2,103× |
+| 30 | 1 of 20 | 34.71 ms | 6.00 µs | 5,785× | 34.41 ms | 6.10 µs | 5,637× |
+| 100 | 1 of 20 | 122.43 ms | 12.28 µs | 9,966× | 122.10 ms | 12.22 µs | 9,994× |
+| 300 | 16 of 20 | 371.54 ms | 31.37 µs | 11,844× | 372.73 ms | 30.89 µs | 12,066× |
+| 700 | 17 of 20 | 876.65 ms | 81.56 µs | 10,748× | 877.41 ms | 80.71 µs | 10,871× |
 
-`contains_profanity` is `text != censor(text)` in both packages, so it costs the same as
-`censor`. `better_profanity` compares each word, and each word joined with up to five following
-words, with all 916 words of the list; `better-profanity-rs` walks a trie once per word. About
-2 µs of each call is fixed: the checks that decide whether Rust may run, among them confirming
-that `CENSOR_WORDSET` still holds the same 916 objects (about 1 µs).
+`contains_profanity` is `text != censor(text)` in both packages, so it costs the same as `censor`.
+`better_profanity` compares each word, and each word joined with up to five following words, with
+all 916 words of the list; `better-profanity-rs` walks a trie once per word. About 2.5 µs of each
+call is fixed: the checks that decide whether Rust may run, among them confirming that
+`CENSOR_WORDSET` still holds the same 916 objects (about 1 µs) and that the stack is far from the
+recursion limit.
 
 Censoring all 97,320 comments of the civil_comments test split (5.0 million words; 10,046 comments
-change) takes 1.08 s with `better-profanity-rs`. `better_profanity` takes 121 s for the first 2,000
-of them, against 0.023 s (5,221×), which puts the whole split at about 1.6 hours on one core.
+change) takes 1.10 s with `better-profanity-rs`. `better_profanity` takes 121 s for the first 2,000
+of them, against 0.024 s (5,008×), which puts the whole split at about 1.6 hours on one core.
 
 `Profanity()` takes 2.1 ms in `better_profanity`. `better-profanity-rs` runs the same constructor
-and compiles the word list on the first call; both together take 2.8 ms. The list is compiled again
+and compiles the word list on the first call; both together take 3.0 ms. The list is compiled again
 only when `CENSOR_WORDSET` changes.
 
 Raw results: [`bindings/python/benchmarks/results/m1-pro.json`](bindings/python/benchmarks/results/m1-pro.json).
@@ -61,7 +62,9 @@ run the Rust path handled all texts; none fell back to the Python code.
 | wikitext | custom | 2,183 | 159 | 0 differ | 0 differ | 0 differ | 0 differ |
 | all | | 313,257 | 70,514 | 0 differ | 0 differ | 0 differ | 0 differ |
 
-The "Full parity" GitHub workflow runs the same script on Linux, macOS and Windows.
+The CPython 3.14 run was repeated after the last changes to the checks that choose between
+Rust and the original code; the other three ran before them. The "Full parity" GitHub workflow
+runs the same script on Linux, macOS and Windows.
 
 ## Reproducing
 

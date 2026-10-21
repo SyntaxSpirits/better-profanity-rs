@@ -42,14 +42,16 @@ def _init(config):
     import better_profanity_rs
     from better_profanity_rs import _fast
 
-    original = _fast._original_hide_swear_words
+    original = _fast._fast_result
     python_path = []
 
     def counting(self, text, censor_char):
-        python_path.append(1)
-        return original(self, text, censor_char)
+        result = original(self, text, censor_char)
+        if result is None:
+            python_path.append(1)
+        return result
 
-    _fast._original_hide_swear_words = counting
+    _fast._fast_result = counting
     _state.update(
         upstream=_make(better_profanity, config),
         port=_make(better_profanity_rs, config),

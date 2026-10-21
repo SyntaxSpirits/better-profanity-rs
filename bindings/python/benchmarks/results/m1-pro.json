@@ -9,70 +9,70 @@
    "words": 10,
    "censored": 0,
    "contains_profanity": {
-    "better_profanity_ms": 9.03,
-    "better_profanity_rs_us": 3.91,
-    "speedup": 2311
+    "better_profanity_ms": 9.11,
+    "better_profanity_rs_us": 4.3,
+    "speedup": 2117
    },
    "censor": {
-    "better_profanity_ms": 9.2,
-    "better_profanity_rs_us": 3.9,
-    "speedup": 2357
+    "better_profanity_ms": 9.07,
+    "better_profanity_rs_us": 4.31,
+    "speedup": 2103
    }
   },
   {
    "words": 30,
    "censored": 1,
    "contains_profanity": {
-    "better_profanity_ms": 34.64,
-    "better_profanity_rs_us": 5.62,
-    "speedup": 6161
+    "better_profanity_ms": 34.71,
+    "better_profanity_rs_us": 6.0,
+    "speedup": 5785
    },
    "censor": {
-    "better_profanity_ms": 34.08,
-    "better_profanity_rs_us": 5.67,
-    "speedup": 6014
+    "better_profanity_ms": 34.41,
+    "better_profanity_rs_us": 6.1,
+    "speedup": 5637
    }
   },
   {
    "words": 100,
    "censored": 1,
    "contains_profanity": {
-    "better_profanity_ms": 123.77,
-    "better_profanity_rs_us": 11.87,
-    "speedup": 10428
+    "better_profanity_ms": 122.43,
+    "better_profanity_rs_us": 12.28,
+    "speedup": 9966
    },
    "censor": {
-    "better_profanity_ms": 123.41,
-    "better_profanity_rs_us": 11.78,
-    "speedup": 10475
+    "better_profanity_ms": 122.1,
+    "better_profanity_rs_us": 12.22,
+    "speedup": 9994
    }
   },
   {
    "words": 300,
    "censored": 16,
    "contains_profanity": {
-    "better_profanity_ms": 375.45,
-    "better_profanity_rs_us": 30.15,
-    "speedup": 12453
+    "better_profanity_ms": 371.54,
+    "better_profanity_rs_us": 31.37,
+    "speedup": 11844
    },
    "censor": {
-    "better_profanity_ms": 375.34,
-    "better_profanity_rs_us": 29.92,
-    "speedup": 12544
+    "better_profanity_ms": 372.73,
+    "better_profanity_rs_us": 30.89,
+    "speedup": 12066
    }
   },
   {
    "words": 700,
    "censored": 17,
    "contains_profanity": {
-    "better_profanity_ms": 888.63,
-    "better_profanity_rs_us": 78.17,
-    "speedup": 11368
+    "better_profanity_ms": 876.65,
+    "better_profanity_rs_us": 81.56,
+    "speedup": 10748
    },
    "censor": {
-    "better_profanity_ms": 885.14,
-    "better_profanity_rs_us": 76.66,
-    "speedup": 11546
+    "better_profanity_ms": 877.41,
+    "better_profanity_rs_us": 80.71,
+    "speedup": 10871
    }
   }
  ],
@@ -81,14 +81,14 @@
   "texts": 97320,
   "words": 4977783,
   "censored": 10046,
-  "better_profanity_rs_s": 1.078,
+  "better_profanity_rs_s": 1.103,
   "sample_texts": 2000,
-  "sample_better_profanity_s": 121.24,
-  "sample_better_profanity_rs_s": 0.0232,
-  "sample_speedup": 5221
+  "sample_better_profanity_s": 120.6,
+  "sample_better_profanity_rs_s": 0.0241,
+  "sample_speedup": 5008
  },
  "setup_ms": {
   "better_profanity_init": 2.14,
-  "better_profanity_rs_init_and_first_call": 2.82
+  "better_profanity_rs_init_and_first_call": 3.02
  }
 }

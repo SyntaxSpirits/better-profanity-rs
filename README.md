@@ -6,8 +6,8 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 [`better_profanity`](https://pypi.org/project/better-profanity/) with a Rust core: the same
-censored text for every input, about 2,300 times faster on a 10-word message and
-10,000 to 12,500 times faster on texts of 100 to 700 words
+censored text for every input, about 2,100 times faster on a 10-word message and
+10,000 to 12,000 times faster on texts of 100 to 700 words
 ([benchmarks](https://github.com/SyntaxSpirits/better-profanity-rs/blob/main/BENCHMARKS.md)).
 
 `better_profanity` is downloaded about two million times a month, although its last release, 0.7.0,
@@ -115,14 +115,17 @@ behave differently, so the output stays the same and only the speed-up is lost:
 - `CENSOR_WORDSET` is not an exact list or tuple of `VaryingString` objects and strings, or a
   `CHARS_MAPPING` value used by a word has a variant that is not exactly one character
   (`better_profanity` also accepts longer and empty variants);
-- `MAX_NUMBER_COMBINATIONS` is not an `int` or is above 50;
+- `MAX_NUMBER_COMBINATIONS` is not an `int`, or the call is made so close to the recursion
+  limit that the original, which recurses `MAX_NUMBER_COMBINATIONS` calls deep, could reach
+  it (within about twice `MAX_NUMBER_COMBINATIONS` + 20 frames);
 - `ALLOWED_CHARACTERS` was replaced by another set, or holds something other than strings;
 - a subclass or a patch replaces `_get_next_words`, `_update_next_words_indices`,
   `_get_start_index_of_next_word`, `_get_next_word_and_end_index`,
   `get_replacement_for_swear_word`, `any_next_words_form_swear_word` or
   `VaryingString.__eq__`, or turns one of the attributes into a property.
 
-Changes in place are seen. `CENSOR_WORDSET` is compiled again when its items change: each call
+The original runs in the same stack frame as in `better_profanity`, so a `RecursionError` is
+raised exactly where `better_profanity` raises it. Changes in place are seen. `CENSOR_WORDSET` is compiled again when its items change: each call
 checks that the list still holds the same objects, which takes about 1 µs for the default
 list. `ALLOWED_CHARACTERS` is a `set` subclass that notes its changes. Lowercasing uses the
 interpreter's `str.lower()`, so, as with `better_profanity`, results follow the Unicode version
@@ -135,6 +138,15 @@ Known differences:
   `CENSOR_WORDSET` is not seen.
 - `ALLOWED_CHARACTERS` is a `set` subclass; changes made through `set` itself, as in
   `set.add(ALLOWED_CHARACTERS, "-")`, are not seen.
+- Near the recursion limit, frames are counted with `sys._getframe`. CPython 3.11 and older
+  also count nested C calls toward the limit; the check allows one per Python frame, so a call
+  made deep inside C-level recursion (a recursive `__repr__`, for example) could still raise
+  where `better_profanity` would not, or the reverse. On CPython 3.11, a call made within two
+  frames of the limit raises `RecursionError` as `better_profanity` does, but the message can
+  name a different operation.
+- A compiled word list keeps the `VaryingString` objects of `CENSOR_WORDSET` alive until the
+  list changes or the `Profanity` object is deleted. An attribute added to one of them that
+  refers back to the `Profanity` object keeps that object alive.
 - `__version__` and `name` are those of `better_profanity_rs`.
 
 ## Development

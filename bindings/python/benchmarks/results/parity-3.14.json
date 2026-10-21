@@ -9,7 +9,7 @@
    "censored_by_better_profanity": 19876,
    "mismatches": 0,
    "python_path_calls": 0,
-   "seconds": 27.0,
+   "seconds": 26.6,
    "examples": []
   },
   {
@@ -19,7 +19,7 @@
    "censored_by_better_profanity": 171,
    "mismatches": 0,
    "python_path_calls": 0,
-   "seconds": 37.8,
+   "seconds": 37.6,
    "examples": []
   },
   {
@@ -29,7 +29,7 @@
    "censored_by_better_profanity": 10046,
    "mismatches": 0,
    "python_path_calls": 0,
-   "seconds": 853.7,
+   "seconds": 846.3,
    "examples": []
   },
   {
@@ -39,7 +39,7 @@
    "censored_by_better_profanity": 20439,
    "mismatches": 0,
    "python_path_calls": 0,
-   "seconds": 1885.0,
+   "seconds": 1850.0,
    "examples": []
   },
   {
@@ -49,7 +49,7 @@
    "censored_by_better_profanity": 19823,
    "mismatches": 0,
    "python_path_calls": 0,
-   "seconds": 26.6,
+   "seconds": 26.3,
    "examples": []
   },
   {
@@ -59,9 +59,9 @@
    "censored_by_better_profanity": 159,
    "mismatches": 0,
    "python_path_calls": 0,
-   "seconds": 38.1,
+   "seconds": 37.6,
    "examples": []
   }
  ],
- "seconds": 2870.9
+ "seconds": 2836.5
 }

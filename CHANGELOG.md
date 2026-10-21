@@ -10,5 +10,6 @@ First release.
 - Python package `better-profanity-rs`: the `better_profanity` API and modules, and `install()`
   to replace `import better_profanity`.
 - Inputs and states the Rust core does not reproduce exactly (`str` subclasses, lone surrogates,
-  multi-character `CHARS_MAPPING` variants, replaced helper methods, `MAX_NUMBER_COMBINATIONS`
-  above 50 and others) run `better_profanity`'s own code, bundled in the package.
+  multi-character `CHARS_MAPPING` variants, replaced helper methods, calls close to the
+  recursion limit and others) run `better_profanity`'s own code, bundled in the package, in the
+  same stack frame.
